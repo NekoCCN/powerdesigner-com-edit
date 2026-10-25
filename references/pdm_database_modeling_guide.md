@@ -98,17 +98,17 @@ Database schemas suffer heavily from overlapping table boxes and criss-crossing 
 ### Recommended Tiered Grid Layout
 Organize tables by dependency level (Foreign Key DAG topology):
 1. **Tier 0 (Root Dictionaries / Independent Lookup Tables)**:
-   - Place in Column 0 ($X = 0$).
+   - Place in Column 0 (`X = 0`).
 2. **Tier 1 (Core Business Entities)**:
-   - Place in Column 1 ($X = 14,000$).
+   - Place in Column 1 (`X = 14,000`).
 3. **Tier 2 (Transaction / History / Line Items)**:
-   - Place in Column 2 ($X = 28,000$).
+   - Place in Column 2 (`X = 28,000`).
 
 ### Vertical Stacking & Margin Rules
 - **Table Box Dimensions**:
-  $$W_{\text{table}} = 6,500\text{--}8,000 \text{ units}$$
-  $$H_{\text{table}} = 1,200 + 450 \times N_{\text{columns}} \text{ units}$$
-- **Vertical Spacing**: Maintain $\Delta Y_{\text{gap}} \ge 2,500$ units between consecutive tables in the same column to leave clear channels for orthogonal reference lines.
+  - Width: `6,500` to `8,000` units
+  - Height: `1,200 + 450 * number_of_columns` units
+- **Vertical Spacing**: Maintain a gap of at least `2,500` units between consecutive tables in the same column to leave clear channels for orthogonal reference lines.
 
 ---
 

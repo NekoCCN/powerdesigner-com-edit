@@ -1,6 +1,6 @@
 # PowerDesigner Sequence Diagram & Activation Bar Guide
 
-This guide provides technical specifications, math models, and COM manipulation instructions for generating sequence diagrams in SAP PowerDesigner with exact, collision-free activation bars (execution specifications) and interaction fragments (`alt`, `opt`, `loop`).
+This guide provides technical specifications, coordinate rules, and COM manipulation instructions for generating sequence diagrams in SAP PowerDesigner with exact, collision-free activation bars (execution specifications) and interaction fragments (`alt`, `opt`, `loop`).
 
 ---
 
@@ -23,52 +23,51 @@ In SAP PowerDesigner 16.5+, Sequence Diagrams are part of the Object-Oriented Mo
 
 ### Why Activation Bars Overlap
 When multiple synchronous calls or nested self-calls target the same lifeline without explicit depth coordinates:
-1. PowerDesigner defaults activation bar width to approx $300\text{--}400$ units and centers it directly over the lifeline's center axis ($X_{\text{lifeline}}$).
-2. If nested activations occur simultaneously, they render at the exact same $X$ coordinate, appearing as an illegible, thick black solid block or overlapping unreadable text.
+1. PowerDesigner defaults activation bar width to approx 300 - 400 units and centers it directly over the lifeline's center axis (`X_lifeline`).
+2. If nested activations occur simultaneously, they render at the exact same X coordinate, appearing as an illegible, thick black solid block.
 
-### The Nested Stack Mathematical Model
+### The Nested Stack Coordinate Calculation
 To create visually distinct activation tiers (nesting / recursion / callback):
-1. **Lifeline Center Axis**: $X_{\text{lifeline}}$
-2. **Base Activation Width**: $W_{\text{act}} = 240$ units
+1. **Lifeline Center Axis**: `X_lifeline`
+2. **Base Activation Width**: `W_act = 240` units
 3. **Activation Horizontal Offset**:
-   $$X_{\text{center}}(depth) = X_{\text{lifeline}} + depth \times \Delta X_{\text{tier}}$$
+   `X_center(depth) = X_lifeline + depth * 120`
    Where:
-   - $\Delta X_{\text{tier}} = 120$ units.
-   - $depth = 0$: Top-level call on this lifeline (centered or $+0$).
-   - $depth = 1$: First nested call received while previous is active ($+120$).
-   - $depth = 2$: Further re-entrant or nested call ($+240$).
+   - `depth = 0`: Top-level call on this lifeline (centered).
+   - `depth = 1`: First nested call received while previous is active (+120 units).
+   - `depth = 2`: Further re-entrant or nested call (+240 units).
 
 ### Vertical Spacing & Ordering
-- **Header Margin**: Top lifeline symbols at $Y = 5,000$.
-- **First Message**: Starts at $Y = 3,500$.
-- **Step Interval**: $\Delta Y_{\text{step}} = -1,800$ to $-2,400$ units per exchange (message + reply).
-- **Minimum Activation Length**: $L_{\text{min}} = 1,200$ units (ensures legible vertical span).
+- **Header Margin**: Top lifeline symbols at `Y = 5,000`.
+- **First Message**: Starts at `Y = 3,500`.
+- **Step Interval**: `step_y = -1,800` to `-2,400` units per exchange (message + reply).
+- **Minimum Activation Length**: `min_len = 1,200` units (ensures legible vertical span).
 
 ---
 
-## 3. Combined Fragment Math (`alt` / `opt` / `loop`)
+## 3. Combined Fragment Calculation (`alt` / `opt` / `loop`)
 
 Interaction fragments must visually enclose all messages and lifelines participating in the conditional block.
 
 ### Bounding Calculation
-Given a subset of lifelines $L = \{l_1, \dots, l_k\}$ and messages $M = \{m_1, \dots, m_p\}$ inside an alt branch:
+Given a subset of lifelines and messages inside an alt branch:
 
-$$\begin{aligned}
-X_{\text{left}} &= \min_{l \in L}(X_l - \frac{W_l}{2}) - \text{Pad}_X \\
-X_{\text{right}} &= \max_{l \in L}(X_l + \frac{W_l}{2}) + \text{Pad}_X \\
-Y_{\text{top}} &= \max_{m \in M}(Y_m) + \text{Pad}_Y \\
-Y_{\text{bottom}} &= \min_{m \in M}(Y_m) - \text{Pad}_Y
-\end{aligned}$$
+```text
+X_left   = min(lifeline.left) - pad_x
+X_right  = max(lifeline.right) + pad_x
+Y_top    = max(message.y) + pad_y
+Y_bottom = min(message.y) - pad_y
+```
 
 Recommended padding:
-- $\text{Pad}_X = 1,200$ units (clears lifeline text and activation bars)
-- $\text{Pad}_Y = 800$ units (clears message text and arrowheads)
+- `pad_x = 1,200` units (clears lifeline text and activation bars)
+- `pad_y = 800` units (clears message text and arrowheads)
 
 ### Partitioning `alt` Operands
-For an `alt` fragment with $k$ branches (e.g. Success vs. Failure):
-- Divider lines are placed at:
-  $$Y_{\text{div}, i} = Y_{\text{top}} - i \times \frac{Y_{\text{top}} - Y_{\text{bottom}}}{k}$$
-- Guard conditions (e.g. `[Credentials Valid]`, `[User Not Found]`) must be positioned top-left of each operand quadrant with a $+200$ unit vertical offset.
+For an `alt` fragment with `k` branches (e.g. Success vs. Failure):
+- Divider lines are placed at equal vertical intervals:
+  `Y_div_i = Y_top - i * (Y_top - Y_bottom) / k`
+- Guard conditions (e.g. `[Credentials Valid]`, `[User Not Found]`) are positioned top-left of each operand quadrant with a `+200` unit vertical offset.
 
 ---
 
