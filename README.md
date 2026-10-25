@@ -10,70 +10,116 @@ PowerDesigner COM Edit (`powerdesigner-com-edit`) is an Agent Skill (`SKILL.md`)
 
 ## Agent Skill Installation
 
-This repository is structured as a standard Agent Skill. When installed, AI agents automatically recognize when you need PowerDesigner automation and leverage this skill to construct clean, collision-free diagrams.
+This repository is designed from the ground up to be deployed as an **Agent Skill**. You can install it either at the **Project Level** (scoped to your current workspace/repository) or at the **Global User Level** (available to your agent across all projects).
 
-### 1. One-Line Installer (Recommended)
+### Option A: Project-Level Installation (Recommended for Teams & Repos)
 
-Run the included installer to automatically detect your agent directories and install the skill:
+Installing at the project level ensures that any AI coding assistant opened inside your project repository will immediately detect and use `powerdesigner-com-edit`, without requiring global system configuration:
 
 ```bash
-# Clone the repository
+# Inside your project root directory:
+git clone https://github.com/NekoCCN/powerdesigner-com-edit.git
+
+# Run the installer with --scope project
+python powerdesigner-com-edit/install.py --scope project
+```
+
+This places the skill in the standard project agent skill directories:
+- `.agents/skills/powerdesigner-com-edit` (Universal Agent standard)
+- `.claude/skills/powerdesigner-com-edit` (Claude Code workspace skill)
+- `.gemini/skills/powerdesigner-com-edit` (Antigravity workspace skill)
+
+Or in PowerShell:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\powerdesigner-com-edit\install.ps1 -Scope project
+```
+
+If you are developing or customizing the skill, use `--link` to create a live junction/symlink instead of copying:
+```bash
+python powerdesigner-com-edit/install.py --scope project --link
+```
+
+### Option B: Global User-Level Installation
+
+Installs the skill into your user home directory so it is active in any terminal session:
+
+```bash
 git clone https://github.com/NekoCCN/powerdesigner-com-edit.git
 cd powerdesigner-com-edit
 
-# Install for both Claude Code and Antigravity (Gemini)
-python install.py
+# Install for all detected AI agents (Claude Code + Antigravity)
+python install.py --scope global
 
-# Or install for a specific agent:
-python install.py --target claude    # Only Claude Code
-python install.py --target gemini    # Only Antigravity / Gemini
-python install.py --target local     # Project-local (.agents/skills)
+# Or target a specific platform:
+python install.py --target claude    # Only ~/.claude/skills
+python install.py --target gemini    # Only ~/.gemini/skills
 ```
 
-Windows PowerShell one-liner:
+Windows PowerShell equivalent:
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Scope global
 ```
 
-### 2. Manual Installation by Agent Platform
+### Option C: Manual Git Clone
 
-#### For Claude Code
-Clone or link the repository into your global Claude skills directory:
-```bash
-git clone https://github.com/NekoCCN/powerdesigner-com-edit.git ~/.claude/skills/powerdesigner-com-edit
-```
-On Windows:
-```powershell
-git clone https://github.com/NekoCCN/powerdesigner-com-edit.git "$HOME\.claude\skills\powerdesigner-com-edit"
-```
+You can also clone the repository directly into your agent's skill path:
 
-#### For Google Antigravity / Gemini CLI
-Clone into your global Antigravity skills directory:
-```bash
-git clone https://github.com/NekoCCN/powerdesigner-com-edit.git ~/.gemini/skills/powerdesigner-com-edit
-```
-On Windows:
-```powershell
-git clone https://github.com/NekoCCN/powerdesigner-com-edit.git "$HOME\.gemini\skills\powerdesigner-com-edit"
-```
+- **Claude Code (Global)**:
+  ```bash
+  git clone https://github.com/NekoCCN/powerdesigner-com-edit.git ~/.claude/skills/powerdesigner-com-edit
+  ```
+- **Antigravity / Gemini CLI (Global)**:
+  ```bash
+  git clone https://github.com/NekoCCN/powerdesigner-com-edit.git ~/.gemini/skills/powerdesigner-com-edit
+  ```
+- **Project-Local (Current Workspace)**:
+  ```bash
+  git clone https://github.com/NekoCCN/powerdesigner-com-edit.git .agents/skills/powerdesigner-com-edit
+  ```
 
-#### For Project-Local Repositories
-Place the skill into your project's `.agents/skills` folder:
-```bash
-mkdir -p .agents/skills
-git clone https://github.com/NekoCCN/powerdesigner-com-edit.git .agents/skills/powerdesigner-com-edit
-```
+### Python Package & CLI Setup
 
-### 3. Python Package & CLI Installation
-If you also want to use the Python API or the `pd-edit` command-line tool directly in your terminal:
+If you want to run the CLI tool (`pd-edit`) or import `pd_com_edit` directly in Python scripts:
 ```bash
 cd powerdesigner-com-edit
 pip install -e .
 ```
-Or install dependencies only:
-```bash
-pip install -r requirements.txt
-```
+
+---
+
+## Generated Diagram Showcase (Real Production Outputs)
+
+Below are actual diagram outputs generated using this toolkit and exported via COM with automatic white-border cropping.
+
+### 1. Sequence Diagram: Multi-Tier Activation Alignment & Alt Fragment
+
+Illustrates the stack-aware activation bar alignment. Re-entrant and concurrent calls received by services have horizontal tier offsets (`X_offset = X_base + depth * 120`), eliminating overlapping black blocks. Also showcases dynamic `alt` frame boundary calculation:
+
+![Sequence Diagram with Activation Bars](docs/images/sequence-activation-bars.png)
+
+### 2. Use Case Diagram: Canonical Three-Column Layout
+
+Demonstrates clean, orthogonal line routing without crossing lines. Primary Human Actors are positioned on the left, Core System Use Cases in the center, and External Systems on the right:
+
+![Three-Column Use Case Layout](docs/images/use-case-three-column.png)
+
+### 3. Physical Data Model (PDM): Relational Database Schema
+
+PostgreSQL physical database model generated programmatically, featuring tables, columns, data types, primary key badges, and explicit foreign key relationship lines (`ReferenceJoin`) with cardinality constraints:
+
+![PDM Relational Schema](docs/images/pdm-entity-relationship.png)
+
+### 4. Domain Model: UML Class Hierarchy & Associations
+
+Domain-Driven Design (DDD) class diagram modeling entities, value objects, aggregate roots, operations, visibility markers (`+`, `-`, `#`), and generalization links:
+
+![Domain Model Class Diagram](docs/images/domain-class-model.png)
+
+### 5. High-Level Architecture Blueprint
+
+Multi-layer cold-chain monitoring system architecture generated directly through PowerDesigner COM automation:
+
+![System Architecture Overview](docs/images/system-architecture.png)
 
 ---
 
@@ -87,10 +133,10 @@ Once installed, your coding assistant will automatically trigger this skill when
 - Batch export cropped, high-resolution PNG diagrams for reports.
 
 Example agent prompts:
-- *"Use powerdesigner-com-edit to create a sequence diagram for our order checkout flow."*
+- *"Use powerdesigner-com-edit to create a sequence diagram for our container allocation flow."*
 - *"Check if any symbols or activation bars overlap in my_model.oom and fix them."*
-- *"Build a PDM schema for our user and order tables with foreign key joins."*
-- *"Export all diagrams in the current model to PNG with blank borders cropped."*
+- *"Build a PDM schema for our order and container tables with foreign key joins."*
+- *"Clean up any draft notes from the diagrams and export all views to PNG."*
 
 ---
 
@@ -106,7 +152,7 @@ Example agent prompts:
 
 ---
 
-## Real-World Examples
+## Code Examples
 
 ### Example 1: Multi-Tier Microservice Sequence Diagram
 
@@ -300,8 +346,15 @@ pd-edit kill-pd
 ```
 powerdesigner-com-edit/
 ├── SKILL.md                      # Agent Skill specification (Claude Code & Antigravity)
-├── install.py                    # Multi-platform Agent Skill installer
+├── install.py                    # Multi-platform & project-level skill installer
 ├── install.ps1                   # PowerShell installer script
+├── docs/                         # Documentation assets & real production diagrams
+│   └── images/
+│       ├── sequence-activation-bars.png
+│       ├── use-case-three-column.png
+│       ├── pdm-entity-relationship.png
+│       ├── domain-class-model.png
+│       └── system-architecture.png
 ├── pd_com_edit/                  # Core Python package
 │   ├── client.py                 # COM lifecycle and process safety
 │   ├── collision.py              # AABB collision detector and auditor
@@ -340,25 +393,32 @@ powerdesigner-com-edit/
 
 ### Skill 安装与配置
 
-#### 1. 一键安装
-```bash
-git clone https://github.com/NekoCCN/powerdesigner-com-edit.git
-cd powerdesigner-com-edit
+#### 1. 项目级别安装（推荐项目内使用）
+针对具体开发仓库或团队协同，直接安装到工程目录中，仓库成员拉取后无需配置全局环境，AI 助手在当前项目下即可直接激活本技能：
 
-# 自动检测并安装到 Claude Code 和 Antigravity 全局 Skills 目录
-python install.py
+```bash
+# 在当前工程根目录下执行：
+python path/to/powerdesigner-com-edit/install.py --scope project
+```
+安装器会自动将 Skill 部署到项目本地目录：
+- `.agents/skills/powerdesigner-com-edit`
+- `.claude/skills/powerdesigner-com-edit`
+- `.gemini/skills/powerdesigner-com-edit`
+
+若希望以软链接（Junction / Symlink）形式安装以便随时跟踪技能代码更新，可追加 `--link` 参数。
+
+#### 2. 全局用户级别安装
+在当前机器的用户主目录下全局生效：
+```bash
+python install.py --scope global
 ```
 或在 Windows PowerShell 中直接运行：
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Scope global
 ```
 
-#### 2. 手动安装
-- **Claude Code**：克隆到 `~/.claude/skills/powerdesigner-com-edit`
-- **Google Antigravity / Gemini CLI**：克隆到 `~/.gemini/skills/powerdesigner-com-edit`
-- **项目本地**：克隆到当前工程的 `.agents/skills/powerdesigner-com-edit`
-
-安装后，AI 助手在收到与 PowerDesigner 建模、时序图排版、重叠检查、PDM 建表、图片导出相关的请求时，会自动调取本技能完成操作。
+#### 3. 生产实例画廊
+README 正文中已嵌入通过本工具生成的 5 张真实图表实例（包含冷链调度嵌套时序图、规范三栏用例图、PostgreSQL 物理数据模型 ER 连线、领域驱动类图以及高层架构图），展示了调用栈激活条对齐、连线防交叉排版以及无白边高清导出的真实效果。
 
 ---
 

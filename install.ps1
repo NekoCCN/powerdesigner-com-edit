@@ -1,50 +1,82 @@
 # PowerShell installer for powerdesigner-com-edit Agent Skill
 [CmdletBinding()]
 param (
-    [string]$Target = "all"
+    [ValidateSet("global", "project", "both")]
+    [string]$Scope = "global",
+
+    [ValidateSet("all", "gemini", "claude")]
+    [string]$Target = "all",
+
+    [string]$ProjectDir = $PWD.Path,
+
+    [switch]$Link
 )
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "Installing powerdesigner-com-edit Agent Skill..." -ForegroundColor Cyan
 
-$RepoUrl = "https://github.com/NekoCCN/powerdesigner-com-edit.git"
-$TempDir = Join-Path $env:TEMP "pd-com-edit-install"
-
-if (Test-Path $TempDir) {
-    Remove-Item -Recurse -Force $TempDir
+$RepoRoot = $PSScriptRoot
+if (-not $RepoRoot) {
+    $RepoRoot = $PWD.Path
 }
 
-Write-Host "Cloning repository..." -ForegroundColor Gray
-git clone --depth 1 $RepoUrl $TempDir
-
-$HomeDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::UserProfile)
-
-$Targets = @()
-if ($Target -eq "all" -or $Target -eq "gemini") {
-    $Targets += (Join-Path $HomeDir ".gemini\skills\powerdesigner-com-edit")
-}
-if ($Target -eq "all" -or $Target -eq "claude") {
-    $Targets += (Join-Path $HomeDir ".claude\skills\powerdesigner-com-edit")
-}
-
-foreach ($dest in $Targets) {
-    $parent = Split-Path -Parent $dest
+function Deploy-Skill([string]$Destination) {
+    $parent = Split-Path -Parent $Destination
     if (-not (Test-Path $parent)) {
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
     }
-    if (Test-Path $dest) {
-        Remove-Item -Recurse -Force $dest
+    if (Test-Path $Destination) {
+        Remove-Item -Recurse -Force $Destination
     }
-    Copy-Item -Path $TempDir -Destination $dest -Recurse -Force
-    # Clean up .git in destination
-    $gitFolder = Join-Path $dest ".git"
-    if (Test-Path $gitFolder) {
-        Remove-Item -Recurse -Force $gitFolder
+
+    if ($Link) {
+        New-Item -ItemType Junction -Path $Destination -Target $RepoRoot | Out-Null
+        Write-Host "Linked skill to: $Destination" -ForegroundColor Green
+    } else {
+        $exclude = @(".git", "__pycache__", "build", "dist", "*.egg-info", ".vscode")
+        Copy-Item -Path $RepoRoot -Destination $Destination -Recurse -Force
+        foreach ($pattern in $exclude) {
+            $matched = Join-Path $Destination $pattern
+            if (Test-Path $matched) {
+                Remove-Item -Recurse -Force $matched
+            }
+        }
+        Write-Host "Installed skill to: $Destination" -ForegroundColor Green
     }
-    Write-Host "Installed skill to: $dest" -ForegroundColor Green
 }
 
-Remove-Item -Recurse -Force $TempDir
-Write-Host "Skill installation completed successfully!" -ForegroundColor Green
-Write-Host "You can now prompt Claude Code or Antigravity: 'Use powerdesigner-com-edit to check diagram overlaps.'" -ForegroundColor Yellow
+# 1. Project-Level Deployment
+if ($Scope -eq "project" -or $Scope -eq "both") {
+    Write-Host "`nDeploying to Project Level: $ProjectDir" -ForegroundColor Cyan
+    $projectTargets = @(
+        (Join-Path $ProjectDir ".agents\skills\powerdesigner-com-edit"),
+        (Join-Path $ProjectDir ".claude\skills\powerdesigner-com-edit"),
+        (Join-Path $ProjectDir ".gemini\skills\powerdesigner-com-edit")
+    )
+    foreach ($dest in $projectTargets) {
+        Deploy-Skill -Destination $dest
+    }
+    Write-Host "Project-level skill deployment finished!" -ForegroundColor Green
+}
+
+# 2. Global User-Level Deployment
+if ($Scope -eq "global" -or $Scope -eq "both") {
+    $HomeDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::UserProfile)
+    Write-Host "`nDeploying to Global User Level ($HomeDir):" -ForegroundColor Cyan
+
+    $globalTargets = @()
+    if ($Target -eq "all" -or $Target -eq "gemini") {
+        $globalTargets += (Join-Path $HomeDir ".gemini\skills\powerdesigner-com-edit")
+    }
+    if ($Target -eq "all" -or $Target -eq "claude") {
+        $globalTargets += (Join-Path $HomeDir ".claude\skills\powerdesigner-com-edit")
+    }
+
+    foreach ($dest in $globalTargets) {
+        Deploy-Skill -Destination $dest
+    }
+    Write-Host "Global skill deployment finished!" -ForegroundColor Green
+}
+
+Write-Host "`nAll set! Coding assistants in this environment can now invoke 'powerdesigner-com-edit'." -ForegroundColor Yellow

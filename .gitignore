@@ -20,19 +20,17 @@ wheels/
 .installed.cfg
 *.egg
 
-# PowerDesigner temporary & backup files
+# Image exports and test outputs
+exports/
 *.bak
 *.tmp
 *.log
 ~*
-
-# Image exports and test outputs
-exports/
-*.png
-*.jpg
 *.oom
 *.pdm
 *.cdm
+!docs/images/*.png
+!docs/images/*.jpg
 
 # Virtual environments
 .env
