@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "powerdesigner-com-edit"
+version = "1.0.0"
+description = "Production-grade SAP PowerDesigner COM automation toolkit: collision detection, sequence activation bar alignment, 3-column layout, and batch export."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "Ext Culith", email = "unirzine@gmail.com" }
+]
+keywords = [
+    "powerdesigner",
+    "sap-powerdesigner",
+    "com-automation",
+    "uml",
+    "sequence-diagram",
+    "use-case-diagram",
+    "pdm",
+    "cdm",
+    "database-modeling",
+    "collision-detection",
+    "layout-engine"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Database"
+]
+dependencies = [
+    "pywin32>=306",
+    "Pillow>=9.0.0",
+    "numpy>=1.20.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/NekoCCN/powerdesigner-com-edit"
+Repository = "https://github.com/NekoCCN/powerdesigner-com-edit"
+"Bug Tracker" = "https://github.com/NekoCCN/powerdesigner-com-edit/issues"
+
+[project.scripts]
+pd-edit = "pd_com_edit.cli:main"
