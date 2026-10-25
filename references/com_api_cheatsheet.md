@@ -101,3 +101,51 @@ symbol.LineWidth = 1
 # Native COM Export (PNG, JPEG, EMF, BMP)
 diagram.ExportImage(r"E:\output\diagram.png", "PNG")
 ```
+
+---
+
+## 6. Connectors & Association Links (AttachLinkObject vs AttachObject)
+
+### Critical Distinction: 2D Symbols vs 1D Connectors
+- **2D Shapes** (Actors, Use Cases, Classes, Tables):
+  Use `diagram.AttachObject(obj)`.
+- **1D Connectors & Lines** (Use Case Associations, Generalizations, Dependencies, Physical References):
+  **MUST** use `diagram.AttachLinkObject(linkObj)` via `attach_link_symbol()`.
+  Calling `AttachObject` on link objects silently returns `None` and draws 0 lines on the diagram.
+
+### pywin32 Safe Dispatch Helper
+Under pywin32, direct calls to `diagram.AttachLinkObject(link)` often trigger COM argument type coercion errors (`The Python instance can not be converted to a COM object`). Dispatching via `_oleobj_.Invoke` resolves this cleanly:
+
+```python
+import pythoncom
+import win32com.client
+
+def attach_link_symbol(diagram, link_obj):
+    if hasattr(diagram, "_oleobj_") and pythoncom is not None:
+        try:
+            dispid = diagram._oleobj_.GetIDsOfNames("AttachLinkObject")
+            ole_link = link_obj._oleobj_ if hasattr(link_obj, "_oleobj_") else link_obj
+            res = diagram._oleobj_.Invoke(dispid, 0, pythoncom.DISPATCH_METHOD, True, ole_link)
+            return win32com.client.dynamic.Dispatch(res)
+        except Exception:
+            pass
+    if hasattr(diagram, "AttachLinkObject"):
+        return diagram.AttachLinkObject(link_obj)
+    return diagram.AttachObject(link_obj)
+```
+
+### Native Object Kinds & Endpoint Properties
+
+| Diagram Element | Native Kind Int | Endpoint 1 Property | Endpoint 2 Property | Attachment Method |
+|---|---|---|---|---|
+| Actor | `403775745` | N/A | N/A | `AttachObject` |
+| Use Case | `403775746` | N/A | N/A | `AttachObject` |
+| UseCase Association | `403775603` | `Object1` (Actor) | `Object2` (UseCase) | `AttachLinkObject` |
+| UseCase Dependency | `403775593` | `Object1` (Source UC) | `Object2` (Target UC) | `AttachLinkObject` |
+| Class | `403775587` | N/A | N/A | `AttachObject` |
+| Interface | `403775588` | N/A | N/A | `AttachObject` |
+| Generalization | `403775592` | `Child` / `Object1` | `Parent` / `Object2` | `AttachLinkObject` |
+| Class Association | `403775594` | `ClassA` / `Object1` | `ClassB` / `Object2` | `AttachLinkObject` |
+| PDM Table | Collection | N/A | N/A | `AttachObject` |
+| PDM Reference | Collection | `ParentTable` / `Object1` | `ChildTable` / `Object2` | `AttachLinkObject` |
+

@@ -12,18 +12,72 @@ from typing import Optional
 
 try:
     import win32com.client
+    import pythoncom
 except ImportError:
     win32com = None
+    pythoncom = None
 
-# Model Type GUIDs in PowerDesigner
+# Model Type GUIDs & Integer Identifiers in PowerDesigner
 CLS_OOM = "{4BA9FBC0-D824-11D1-A1DF-0020AF12A261}"  # Object-Oriented Model
 CLS_PDM = "{CDE44E21-3017-11D2-8A2D-00609756FE6C}"  # Physical Data Model
 CLS_CDM = "{9C84FDF4-9E0C-11D1-A1DE-0020AF12A261}"  # Conceptual Data Model
 CLS_BPM = "{8F7D0DF1-7C65-11D3-B437-0060976527C0}"  # Business Process Model
 
+# Native Model Kind Constants (for CreateModel integer call)
+MODEL_OOM = 403775584
+MODEL_CDM = 509178224
+
+# Native Object Kind Constants in PowerDesigner OOM
+KIND_CLASS = 403775587
+KIND_INTERFACE = 403775588
+KIND_ATTRIBUTE = 403775589
+KIND_OPERATION = 403775590
+KIND_GENERALIZATION = 403775592
+KIND_DEPENDENCY = 403775593
+KIND_CLASS_ASSOC = 403775594
+KIND_ACTOR = 403775745
+KIND_USECASE = 403775746
+KIND_USECASE_ASSOC = 403775603
+KIND_INTERACTION_FRAGMENT = -168517650
+
 def rgb(r: int, g: int, b: int) -> int:
     """Convert RGB (0-255) to Windows COLORREF integer."""
     return int(r) + (int(g) << 8) + (int(b) << 16)
+
+
+def attach_link_symbol(diagram, link_obj):
+    """
+    Safely attach a link/connector symbol (Association, Generalization, Dependency, Reference)
+    to a PowerDesigner diagram.
+
+    In PowerDesigner COM, 2D symbols use `AttachObject` while 1D line connectors MUST use
+    `AttachLinkObject`. Under pywin32, calling AttachLinkObject directly on dynamic dispatch
+    can encounter COM argument type coercion issues; invoking via IDispatch safely resolves this.
+    """
+    if hasattr(diagram, "_oleobj_") and pythoncom is not None:
+        try:
+            dispid = diagram._oleobj_.GetIDsOfNames("AttachLinkObject")
+            ole_link = link_obj._oleobj_ if hasattr(link_obj, "_oleobj_") else link_obj
+            res = diagram._oleobj_.Invoke(dispid, 0, pythoncom.DISPATCH_METHOD, True, ole_link)
+            if win32com:
+                return win32com.client.dynamic.Dispatch(res)
+            return res
+        except Exception:
+            pass
+
+    if hasattr(diagram, "AttachLinkObject"):
+        try:
+            return diagram.AttachLinkObject(link_obj)
+        except Exception:
+            pass
+
+    if hasattr(diagram, "AttachObject"):
+        try:
+            return diagram.AttachObject(link_obj)
+        except Exception:
+            pass
+
+    return None
 
 
 class PowerDesignerClient:
@@ -43,12 +97,27 @@ class PowerDesignerClient:
         while time.time() - start_time < self.timeout_sec:
             try:
                 self.app = win32com.client.Dispatch("PowerDesigner.Application")
-                self.app.Visible = self.visible
+                try:
+                    self.app.Visible = self.visible
+                except Exception:
+                    pass
                 return
             except Exception as e:
                 last_error = e
                 time.sleep(1)
         raise RuntimeError(f"Failed to connect to PowerDesigner.Application: {last_error}")
+
+    def start(self, visible: Optional[bool] = None):
+        """Start or re-verify connection to PowerDesigner Application."""
+        if visible is not None:
+            self.visible = visible
+        if self.app is None:
+            self._connect()
+        elif visible is not None:
+            try:
+                self.app.Visible = visible
+            except Exception:
+                pass
 
     def create_oom_model(self, name: str = "NewOOM", language: str = "Java"):
         """Create a new Object-Oriented Model (OOM)."""
@@ -57,12 +126,16 @@ class PowerDesignerClient:
             model.SetName(name)
         return model
 
+    create_oom = create_oom_model
+
     def create_pdm_model(self, name: str = "NewPDM", dbms: str = "PostgreSQL 15"):
         """Create a new Physical Data Model (PDM)."""
         model = self.app.CreateModel(CLS_PDM, f"|DBMS={dbms}|")
         if name:
             model.SetName(name)
         return model
+
+    create_pdm = create_pdm_model
 
     def create_cdm_model(self, name: str = "NewCDM"):
         """Create a new Conceptual Data Model (CDM)."""
@@ -71,6 +144,8 @@ class PowerDesignerClient:
             model.SetName(name)
         return model
 
+    create_cdm = create_cdm_model
+
     def open_model(self, path: str):
         """Open an existing .oom, .cdm, or .pdm file."""
         if not os.path.isabs(path):
@@ -78,6 +153,28 @@ class PowerDesignerClient:
         if not os.path.exists(path):
             raise FileNotFoundError(f"Model file not found: {path}")
         return self.app.OpenModel(path)
+
+    def save_model(self, model, path: str):
+        """Save a model to specified target file path."""
+        if not os.path.isabs(path):
+            path = os.path.abspath(path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        try:
+            model.SaveAs(path)
+        except Exception:
+            try:
+                model.Save(path)
+            except Exception:
+                model.Save()
+
+    def close_model(self, model, save_changes: bool = False):
+        """Close an individual model safely."""
+        try:
+            if save_changes:
+                model.Save()
+            model.Close()
+        except Exception:
+            pass
 
     def open_workspace(self, path: str):
         """Open a PowerDesigner workspace (.pbw)."""

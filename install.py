@@ -31,7 +31,8 @@ def copy_or_link_skill(source_dir: Path, target_dir: Path, symlink: bool = False
             print("Symlink creation failed (permission denied). Falling back to direct copy...")
 
     ignore = shutil.ignore_patterns(
-        ".git", "__pycache__", "*.pyc", "build", "dist", "*.egg-info", ".vscode"
+        ".git", "__pycache__", "*.pyc", "build", "dist", "*.egg-info", ".vscode",
+        ".agents", ".claude", ".gemini", ".pytest_cache"
     )
     shutil.copytree(source_dir, target_dir, ignore=ignore)
     print(f"Installed skill to: {target_dir}")
@@ -101,7 +102,11 @@ def main():
 
     # 2. Project-level installation
     if args.scope in ["project", "both"]:
-        project_dir = Path(args.project_dir) if args.project_dir else Path.cwd()
+        if args.project_dir:
+            project_dir = Path(args.project_dir).resolve()
+        else:
+            cwd = Path.cwd().resolve()
+            project_dir = repo_root.parent if cwd == repo_root else cwd
         install_to_project(repo_root, project_dir, symlink=args.link)
         if args.scope == "project":
             return

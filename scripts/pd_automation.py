@@ -18,8 +18,10 @@ from typing import List, Dict, Tuple, Optional, Any
 
 try:
     import win32com.client
+    import pythoncom
 except ImportError:
     win32com = None
+    pythoncom = None
 
 try:
     from PIL import Image
@@ -28,9 +30,49 @@ except ImportError:
     Image = None
     np = None
 
+# Native Object Kind Constants in PowerDesigner OOM
+KIND_CLASS = 403775587
+KIND_GENERALIZATION = 403775592
+KIND_DEPENDENCY = 403775593
+KIND_CLASS_ASSOC = 403775594
+KIND_ACTOR = 403775745
+KIND_USECASE = 403775746
+KIND_USECASE_ASSOC = 403775603
+
 def rgb(r: int, g: int, b: int) -> int:
     """Convert RGB (0-255) to Windows COLORREF integer."""
     return r + (g << 8) + (b << 16)
+
+
+def attach_link_symbol(diagram, link_obj):
+    """
+    Safely attach a link/connector symbol (Association, Generalization, Dependency, Reference)
+    to a PowerDesigner diagram.
+    """
+    if hasattr(diagram, "_oleobj_") and pythoncom is not None:
+        try:
+            dispid = diagram._oleobj_.GetIDsOfNames("AttachLinkObject")
+            ole_link = link_obj._oleobj_ if hasattr(link_obj, "_oleobj_") else link_obj
+            res = diagram._oleobj_.Invoke(dispid, 0, pythoncom.DISPATCH_METHOD, True, ole_link)
+            if win32com:
+                return win32com.client.dynamic.Dispatch(res)
+            return res
+        except Exception:
+            pass
+
+    if hasattr(diagram, "AttachLinkObject"):
+        try:
+            return diagram.AttachLinkObject(link_obj)
+        except Exception:
+            pass
+
+    if hasattr(diagram, "AttachObject"):
+        try:
+            return diagram.AttachObject(link_obj)
+        except Exception:
+            pass
+
+    return None
 
 
 class PowerDesignerClient:
@@ -250,16 +292,25 @@ class SequenceDiagramBuilder:
         self.lifelines[name] = (obj, sym, x_pos)
         return obj, sym
 
-    def add_message(self, sender_name: str, receiver_name: str, label: str, is_return: bool = False):
+    def add_message(
+        self,
+        sender_name: str,
+        receiver_name: str,
+        label: str,
+        is_return: bool = False,
+        message_type: str = "sync",
+    ):
         if sender_name not in self.lifelines or receiver_name not in self.lifelines:
             raise ValueError(f"Unknown sender '{sender_name}' or receiver '{receiver_name}'")
+
+        eff_return = is_return or (message_type.lower() in ("reply", "return"))
 
         y = self.current_y
         self.messages.append({
             "sender": sender_name,
             "receiver": receiver_name,
             "label": label,
-            "is_return": is_return,
+            "is_return": eff_return,
             "y": y
         })
         self.current_y += self.step_y
@@ -287,11 +338,13 @@ class SequenceDiagramBuilder:
             msg.SetName(label)
             msg.Sender = s_obj
             msg.Receiver = r_obj
-            msg_sym = self.diagram.AttachObject(msg)
+            msg_sym = attach_link_symbol(self.diagram, msg)
 
             try:
-                msg_sym.SourcePoint.Y = y
-                msg_sym.DestinationPoint.Y = y
+                if hasattr(msg_sym, "SourcePoint"):
+                    msg_sym.SourcePoint.Y = y
+                if hasattr(msg_sym, "DestinationPoint"):
+                    msg_sym.DestinationPoint.Y = y
             except Exception:
                 pass
 
@@ -319,72 +372,195 @@ class SequenceDiagramBuilder:
 
         return completed_bars
 
+    layout_diagram = build_messages
+
 
 class UseCaseDiagramBuilder:
     """
-    Constructs clean, collision-free 3-column Use Case Diagrams.
-    Includes built-in collision detection and auto-spacing.
+    Constructs clean, collision-free Use Case Diagrams with full association link support.
     """
 
-    def __init__(self, diagram, col1_x: int = 1500, col2_x: int = 5500, col3_x: int = 9500, start_y: int = -1000, step_y: int = -1200):
+    def __init__(
+        self,
+        diagram,
+        col1_x: int = -38000,
+        col2_x: int = -14000,
+        col3_x: int = 14000,
+        col4_x: int = 38000,
+        start_y: int = 28000,
+        step_y: int = -8000,
+    ):
         self.diagram = diagram
         self.model = diagram.Model
         self.col1_x = col1_x
         self.col2_x = col2_x
         self.col3_x = col3_x
+        self.col4_x = col4_x
         self.start_y = start_y
         self.step_y = step_y
 
         self.actors = {}
         self.use_cases = {}
+        self.links = []
 
-    def add_actor(self, name: str, is_secondary: bool = False):
-        act = self.model.Actors.CreateNew()
-        act.SetName(name)
-        sym = self.diagram.AttachObject(act)
-        idx = len(self.actors)
-        x = self.col3_x if is_secondary else self.col1_x
-        y = self.start_y + idx * self.step_y
+    def add_actor(
+        self,
+        name: str,
+        code: str = "",
+        is_secondary: bool = False,
+        is_primary: Optional[bool] = None,
+        column: int = 1,
+        x: Optional[int] = None,
+        y: Optional[int] = None,
+    ):
+        if is_primary is not None:
+            is_secondary = not is_primary
+
         try:
-            sym.Position.X = x
-            sym.Position.Y = y
+            act = self.model.CreateObject(KIND_ACTOR)
+        except Exception:
+            act = self.model.Actors.CreateNew()
+
+        act.SetName(name)
+        if code:
+            act.Code = code
+        elif hasattr(act, "Code") and not act.Code:
+            act.Code = f"Actor_{len(self.actors) + 1}"
+
+        sym = self.diagram.AttachObject(act)
+
+        idx = len(self.actors)
+        default_x = self.col4_x if (is_secondary or column >= 4) else self.col1_x
+        pos_x = x if x is not None else default_x
+        pos_y = y if y is not None else (self.start_y + idx * self.step_y)
+
+        try:
+            if hasattr(sym, "Position"):
+                sym.Position.X = pos_x
+                sym.Position.Y = pos_y
         except Exception:
             pass
+
         self.actors[name] = (act, sym)
         return act
 
-    def add_use_case(self, name: str, code: str = ""):
-        uc = self.model.UseCases.CreateNew()
+    def add_system(self, name: str, code: str = "", x: Optional[int] = None, y: Optional[int] = None):
+        return self.add_actor(name=name, code=code, is_secondary=True, column=4, x=x, y=y)
+
+    def add_use_case(
+        self,
+        name: str,
+        code: str = "",
+        column: int = 2,
+        x: Optional[int] = None,
+        y: Optional[int] = None,
+        width: int = 14000,
+        height: int = 4000,
+    ):
+        try:
+            uc = self.model.CreateObject(KIND_USECASE)
+        except Exception:
+            uc = self.model.UseCases.CreateNew()
+
         full_name = f"{code} {name}".strip() if code else name
         uc.SetName(full_name)
+        if code:
+            uc.Code = code
+
         sym = self.diagram.AttachObject(uc)
+
         idx = len(self.use_cases)
-        x = self.col2_x
-        y = self.start_y + idx * self.step_y
+        col_x = self.col2_x if column <= 2 else self.col3_x
+        pos_x = x if x is not None else col_x
+        pos_y = y if y is not None else (self.start_y + idx * self.step_y)
+
         try:
-            sym.Position.X = x
-            sym.Position.Y = y
-            sym.Size.Width = 3200
-            sym.Size.Height = 1000
+            if hasattr(sym, "Position"):
+                sym.Position.X = pos_x
+                sym.Position.Y = pos_y
+            if hasattr(sym, "Size"):
+                if hasattr(sym.Size, "X"):
+                    sym.Size.X = width
+                    sym.Size.Y = height
+                elif hasattr(sym.Size, "Width"):
+                    sym.Size.Width = width
+                    sym.Size.Height = height
         except Exception:
             pass
+
         self.use_cases[name] = (uc, sym)
         return uc
 
-    def link(self, actor_name: str, use_case_name: str):
+    add_usecase = add_use_case
+
+    def link(self, actor_name: str, use_case_name: str, stereotype: str = ""):
         if actor_name not in self.actors or use_case_name not in self.use_cases:
-            return
+            return None
         act_obj, _ = self.actors[actor_name]
         uc_obj, _ = self.use_cases[use_case_name]
-        assoc = self.model.ExtendedDependencies.CreateNew()
-        assoc.Source = act_obj
-        assoc.Destination = uc_obj
-        self.diagram.AttachObject(assoc)
 
-    def audit_and_fix_overlaps(self):
-        """Run collision detection on use cases and auto-adjust spacing if necessary."""
-        symbols = [sym for _, sym in self.use_cases.values()]
-        CollisionDetector.auto_resolve_vertical_overlaps(symbols, min_spacing=300)
+        try:
+            assoc = self.model.CreateObject(KIND_USECASE_ASSOC)
+        except Exception:
+            assoc = self.model.Associations.CreateNew()
+
+        assoc.Object1 = act_obj
+        assoc.Object2 = uc_obj
+        if stereotype and hasattr(assoc, "Stereotype"):
+            assoc.Stereotype = stereotype
+
+        sym_l = attach_link_symbol(self.diagram, assoc)
+        self.links.append((assoc, sym_l))
+        return sym_l
+
+    def link_use_cases(self, source_uc_name: str, target_uc_name: str, stereotype: str = "include"):
+        if source_uc_name not in self.use_cases or target_uc_name not in self.use_cases:
+            return None
+        src_obj, _ = self.use_cases[source_uc_name]
+        tgt_obj, _ = self.use_cases[target_uc_name]
+
+        try:
+            dep = self.model.CreateObject(KIND_DEPENDENCY)
+        except Exception:
+            dep = self.model.ExtendedDependencies.CreateNew()
+
+        dep.Object1 = src_obj
+        dep.Object2 = tgt_obj
+        if stereotype and hasattr(dep, "Stereotype"):
+            dep.Stereotype = stereotype
+
+        sym_l = attach_link_symbol(self.diagram, dep)
+        self.links.append((dep, sym_l))
+        return sym_l
+
+    def connect(self, source: str, target: str, stereotype: str = ""):
+        if source in self.actors and target in self.use_cases:
+            return self.link(source, target, stereotype)
+        elif source in self.use_cases and target in self.actors:
+            return self.link(target, source, stereotype)
+        elif source in self.use_cases and target in self.use_cases:
+            return self.link_use_cases(source, target, stereotype or "include")
+        return None
+
+    def layout_three_column(self, min_spacing: int = 1500):
+        primary_actors = [item for item in self.actors.values() if item[1] is not None]
+        for idx, (_, sym) in enumerate(primary_actors):
+            try:
+                if hasattr(sym, "Position"):
+                    if sym.Position.X < 0:
+                        sym.Position.X = self.col1_x
+                        sym.Position.Y = self.start_y + idx * self.step_y
+                    else:
+                        sym.Position.X = self.col4_x
+                        sym.Position.Y = self.start_y + idx * self.step_y
+            except Exception:
+                pass
+        self.audit_and_fix_overlaps(min_spacing=min_spacing)
+
+    def audit_and_fix_overlaps(self, min_spacing: int = 1500):
+        symbols = [sym for _, sym in self.use_cases.values() if sym is not None]
+        if symbols:
+            CollisionDetector.auto_resolve_vertical_overlaps(symbols, min_spacing=min_spacing)
 
 
 class ImageExporter:

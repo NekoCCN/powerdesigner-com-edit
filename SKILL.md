@@ -19,9 +19,10 @@ Use this skill to automate, construct, audit, resolve visual overlaps, and batch
    - Automated timeline placement of lifelines and synchronous/asynchronous messages.
    - **Call-Stack Activation Bar Algorithm**: Accurately bounds activation bars and applies horizontal nesting offsets (`X_offset = X_base + depth * 120`) to prevent overlapping blocks.
    - **Combined Fragment (`alt`, `opt`, `loop`) Framing**: Calculates proper bounding boxes covering all participating lifelines and branch regions.
-4. **Use Case & Class Diagram Layout**:
-   - 3-column collision-free placement (Primary Actors $\to$ System Boundary Use Cases $\to$ External Systems).
+4. **Use Case & Class Diagram Layout & Connector Attachment**:
+   - 3-column collision-free placement (Primary Actors -> System Boundary Use Cases -> External Systems).
    - Dynamic label spacing to eliminate overlapping text.
+   - **Guaranteed Connector Rendering**: Always attaches 1D links (associations, generalizations, dependencies, references) via `AttachLinkObject` (`attach_link_symbol`) with `Object1`/`Object2` binding, preventing missing relationship lines.
 5. **Clean Production Export**:
    - Batch-export diagrams to PNG/JPEG with automatic bounding-box trimming (removes giant whitespace borders).
 
@@ -131,6 +132,11 @@ To prevent line crossings and text collisions:
 - **Column 3 (`X ≈ 9,500`)**: Secondary Actors / External Systems (e.g. Customer, Audit System).
 
 Associations are drawn left-to-right into Column 2, ensuring clean horizontal connections with zero diagonal label collisions.
+
+### Connector Attachment Rules (No Missing Lines)
+- 2D symbols use `diagram.AttachObject(obj)`.
+- 1D connectors (associations, dependencies, generalizations, references) **must** use `diagram.AttachLinkObject(link)` via `attach_link_symbol()`.
+- Set `link.Object1` and `link.Object2` before calling `AttachLinkObject`. Calling `AttachObject` on links silently fails to render line symbols.
 
 ---
 

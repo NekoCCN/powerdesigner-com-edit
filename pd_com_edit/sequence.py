@@ -6,6 +6,7 @@ UML Sequence Diagram Builder with Call-Stack Activation Bar Automation
 
 from typing import List, Dict, Tuple, Optional, Any
 from .collision import CollisionDetector
+from .client import attach_link_symbol
 
 class SequenceDiagramBuilder:
     """
@@ -51,17 +52,26 @@ class SequenceDiagramBuilder:
         self.lifelines[name] = (obj, sym, x_pos)
         return obj, sym
 
-    def add_message(self, sender_name: str, receiver_name: str, label: str, is_return: bool = False) -> int:
-        """Add a synchronous or return message along the timeline."""
+    def add_message(
+        self,
+        sender_name: str,
+        receiver_name: str,
+        label: str,
+        is_return: bool = False,
+        message_type: str = "sync",
+    ) -> int:
+        """Add a synchronous, asynchronous, or reply message along the timeline."""
         if sender_name not in self.lifelines or receiver_name not in self.lifelines:
             raise ValueError(f"Unknown sender '{sender_name}' or receiver '{receiver_name}'")
+
+        eff_return = is_return or (message_type.lower() in ("reply", "return"))
 
         y = self.current_y
         self.messages.append({
             "sender": sender_name,
             "receiver": receiver_name,
             "label": label,
-            "is_return": is_return,
+            "is_return": eff_return,
             "y": y
         })
         self.current_y += self.step_y
@@ -99,11 +109,13 @@ class SequenceDiagramBuilder:
             msg.SetName(label)
             msg.Sender = s_obj
             msg.Receiver = r_obj
-            msg_sym = self.diagram.AttachObject(msg)
+            msg_sym = attach_link_symbol(self.diagram, msg)
 
             try:
-                msg_sym.SourcePoint.Y = y
-                msg_sym.DestinationPoint.Y = y
+                if hasattr(msg_sym, "SourcePoint"):
+                    msg_sym.SourcePoint.Y = y
+                if hasattr(msg_sym, "DestinationPoint"):
+                    msg_sym.DestinationPoint.Y = y
             except Exception:
                 pass
 
@@ -134,6 +146,8 @@ class SequenceDiagramBuilder:
             print("[SequenceDiagramBuilder] Verification passed: 0 Activation Bar Overlaps.")
 
         return completed_bars
+
+    layout_diagram = build_messages
 
     def _render_fragment(self, frag: Dict[str, Any]):
         """Render a CombinedFragment symbol bounding the participants and message range."""

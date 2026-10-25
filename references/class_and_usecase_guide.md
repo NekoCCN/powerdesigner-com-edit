@@ -95,3 +95,20 @@ builder.connect("Administrator", "Manage Products")
 builder.layout_three_column()
 client.save_model(model, "usecases.oom")
 ```
+
+---
+
+## 5. Connector Creation & Attachment Rules (Avoiding Missing Lines)
+
+A frequent defect in PowerDesigner automation is diagrams rendering symbols without relationship lines. This occurs when automation code treats 1D connectors as 2D objects:
+
+1. **AttachLinkObject vs AttachObject**:
+   - 2D symbols (Actors, Use Cases, Classes) are attached with `diagram.AttachObject(obj)`.
+   - 1D connectors (Associations, Generalizations, Dependencies) **must** be attached with `diagram.AttachLinkObject(link_obj)` via `attach_link_symbol()`.
+   - Calling `AttachObject(link_obj)` fails silently and does not render lines.
+
+2. **Endpoint Binding**:
+   - In PowerDesigner OOM, connectors use `Object1` and `Object2` properties to bind endpoints (or `Child`/`Parent` for generalization).
+   - In Use Case diagrams, associations between Actors and Use Cases must be created as `UseCaseAssociation` (`KIND_USECASE_ASSOC = 403775603`), with `assoc.Object1 = actor_obj` and `assoc.Object2 = usecase_obj`.
+   - Use `attach_link_symbol(diagram, assoc)` to ensure the line is drawn on canvas.
+
