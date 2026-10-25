@@ -17,7 +17,7 @@ Use this skill to automate, construct, audit, resolve visual overlaps, and batch
    - **Draft Annotation Cleaner**: Automatically identifies and deletes lingering development notes (e.g. `（实现中，待整链验收）`, `兼有教学管理权限...`).
 3. **Sequence Diagram Automation**:
    - Automated timeline placement of lifelines and synchronous/asynchronous messages.
-   - **Call-Stack Activation Bar Algorithm**: Accurately bounds activation bars and applies horizontal nesting offsets ($X_{\text{offset}} = X_{\text{base}} + \text{depth} \times 120$) to prevent overlapping blocks.
+   - **Call-Stack Activation Bar Algorithm**: Accurately bounds activation bars and applies horizontal nesting offsets (`X_offset = X_base + depth * 120`) to prevent overlapping blocks.
    - **Combined Fragment (`alt`, `opt`, `loop`) Framing**: Calculates proper bounding boxes covering all participating lifelines and branch regions.
 4. **Use Case & Class Diagram Layout**:
    - 3-column collision-free placement (Primary Actors $\to$ System Boundary Use Cases $\to$ External Systems).
@@ -77,7 +77,7 @@ client.close_all_safely()
 When multiple calls hit the same lifeline:
 - **Root Cause**: Scripts rendering activation rectangles at identical X coordinates without tracking call depth.
 - **Auto-Fix**: `SequenceDiagramBuilder` automatically computes call nesting depth. If `depth > 0`, horizontal position is shifted:
-  $$X_{\text{offset}} = X_{\text{base}} + \text{depth} \times 120$$
+  `X_offset = X_base + depth * 120`
 - **Verification**: `CollisionDetector.audit_activation_bar_overlaps(completed_bars)` ensures 0 intervals intersect on identical depths.
 
 ### 2. Symbol & Text Overlaps (AABB Collision)
@@ -126,9 +126,9 @@ frag_sym.Size.Height = y_top - y_bottom
 ## 4. Use Case Diagram Layout (防重叠三列布局)
 
 To prevent line crossings and text collisions:
-- **Column 1 ($X \approx 1500$)**: Primary Actors (e.g. Operator, Inspector, Dispatcher).
-- **Column 2 ($X \approx 5500$)**: Use Cases inside System Boundary ($W=3200, H=1000, \Delta Y=-1200$).
-- **Column 3 ($X \approx 9500$)**: Secondary Actors / External Systems (e.g. Customer, Audit System).
+- **Column 1 (`X ≈ 1,500`)**: Primary Actors (e.g. Operator, Inspector, Dispatcher).
+- **Column 2 (`X ≈ 5,500`)**: Use Cases inside System Boundary (`Width=3200, Height=1000, step_y=-1200`).
+- **Column 3 (`X ≈ 9,500`)**: Secondary Actors / External Systems (e.g. Customer, Audit System).
 
 Associations are drawn left-to-right into Column 2, ensuring clean horizontal connections with zero diagonal label collisions.
 
