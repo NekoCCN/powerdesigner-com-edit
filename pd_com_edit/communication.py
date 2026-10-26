@@ -177,6 +177,10 @@ class CommunicationDiagramBuilder:
             link.Name = name
 
         sym_l = ensure_dynamic(attach_link_symbol(self.diagram, link))
+        try:
+            sym_l.CornerStyle = 0
+        except Exception:
+            pass
         self.links[key] = (link, sym_l)
         return link
 
@@ -229,6 +233,10 @@ class CommunicationDiagramBuilder:
             except Exception:
                 pass
             sym_l = ensure_dynamic(attach_link_symbol(self.diagram, link))
+            try:
+                sym_l.CornerStyle = 0
+            except Exception:
+                pass
             self.links[key] = (link, sym_l)
         else:
             link, _ = link_tuple
@@ -298,6 +306,10 @@ class CommunicationDiagramBuilder:
             if hasattr(sym1, "Position") and hasattr(sym2, "Position"):
                 x1, y1 = sym1.Position.X, sym1.Position.Y
                 x2, y2 = sym2.Position.X, sym2.Position.Y
+                try:
+                    sym_l.CornerStyle = 0
+                except Exception:
+                    pass
                 try:
                     sym_l.ListOfPoints.AsText = f"(({x1},{y1}),({x2},{y2}))"
                 except Exception:
