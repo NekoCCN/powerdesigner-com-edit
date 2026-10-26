@@ -88,15 +88,21 @@ class CommunicationDiagramBuilder:
         class_name: str = "",
         x: Optional[int] = None,
         y: Optional[int] = None,
-        width: int = 14000,
-        height: int = 4500,
+        width: int = 13000,
+        height: int = 4200,
     ) -> Any:
         """
         Create and attach an interacting Object/Instance node conforming to UML 2.5 Lifeline standards.
-        If class_name is provided, associates with a Class classifier to render standard 'name : ClassName'.
+        Supports:
+        - Anonymous instance (Textbook Standard, no duplicate words): name="" or name=":ClassName" -> renders ':ClassName'
+        - Named instance: name="ctrl", class_name="OrderController" -> renders 'ctrl : OrderController'
         """
         obj = ensure_dynamic(self.model.Objects.CreateNew())
-        obj.Name = name
+        
+        display_key = name
+        if name.startswith(":") and not class_name:
+            class_name = name[1:].strip()
+            name = ""
 
         # Standard UML 2.5 Lifeline Classifier Association
         if class_name:
@@ -121,6 +127,12 @@ class CommunicationDiagramBuilder:
                 except Exception:
                     pass
 
+        # If anonymous instance, empty name renders ':ClassName' (avoids repeated name:Class text)
+        try:
+            obj.Name = name
+        except Exception:
+            pass
+
         sym = ensure_dynamic(self.diagram.AttachObject(obj))
 
         try:
@@ -138,7 +150,10 @@ class CommunicationDiagramBuilder:
         except Exception:
             pass
 
-        self.objects[name] = (obj, sym)
+        reg_name = display_key or name or (f":{class_name}" if class_name else "Object")
+        self.objects[reg_name] = (obj, sym)
+        if class_name and reg_name != class_name:
+            self.objects[class_name] = (obj, sym)
         return obj
 
     def add_link(self, obj1_name: str, obj2_name: str, name: str = "") -> Any:
@@ -177,18 +192,12 @@ class CommunicationDiagramBuilder:
         In PowerDesigner Communication diagrams, messages automatically render directional arrows
         and sequence numbering along the InstanceLink.
         """
-        key = tuple(sorted([sender_name, receiver_name]))
-        link_tuple = self.links.get(key)
-        if not link_tuple:
-            # Auto-create link if it does not exist yet
-            link_obj = self.add_link(sender_name, receiver_name)
-            link_tuple = self.links.get(key)
-            if not link_tuple:
-                return None
-
-        link, _ = link_tuple
-        sender_obj = self._resolve_participant(sender_name)[0]
-        receiver_obj = self._resolve_participant(receiver_name)[0]
+        p1 = self._resolve_participant(sender_name)
+        p2 = self._resolve_participant(receiver_name)
+        if not p1 or not p2:
+            return None
+        sender_obj = p1[0]
+        receiver_obj = p2[0]
 
         msg = ensure_dynamic(self.model.Messages.CreateNew())
         clean_seq = sequence_number.strip().rstrip(":")
@@ -207,18 +216,29 @@ class CommunicationDiagramBuilder:
         msg.Sender = sender_obj
         msg.Receiver = receiver_obj
 
-        # Bind to link using official Sybase insert (-1)
-        try:
-            if hasattr(link, "Messages"):
-                link.Messages.Insert(-1, msg)
-            elif hasattr(msg, "InstanceLink"):
-                msg.InstanceLink = link
-        except Exception:
+        key = tuple(sorted([sender_name, receiver_name]))
+        link_tuple = self.links.get(key)
+        if not link_tuple:
+            # Create link and insert message BEFORE attaching symbol so diagram engine
+            # binds the message symbol directly to the link symbol without displacement
+            link = ensure_dynamic(self.model.InstanceLinks.CreateNew())
+            link.Object1 = sender_obj
+            link.Object2 = receiver_obj
             try:
-                if hasattr(link, "Messages"):
-                    link.Messages.Add(msg)
+                link.Messages.Insert(-1, msg)
             except Exception:
                 pass
+            sym_l = ensure_dynamic(attach_link_symbol(self.diagram, link))
+            self.links[key] = (link, sym_l)
+        else:
+            link, _ = link_tuple
+            try:
+                link.Messages.Insert(-1, msg)
+            except Exception:
+                try:
+                    link.Messages.Add(msg)
+                except Exception:
+                    pass
 
         self.messages.append({
             "sender": sender_name,
@@ -248,14 +268,33 @@ class CommunicationDiagramBuilder:
         except Exception:
             pass
 
+        all_parts = list(self.actors.values()) + list(self.objects.values())
+
         for (k1, k2), (link, sym_l) in self.links.items():
             if not sym_l or not hasattr(sym_l, "ListOfPoints"):
                 continue
-            p1 = self._resolve_participant(k1)
-            p2 = self._resolve_participant(k2)
-            if not p1 or not p2 or not p1[1] or not p2[1]:
+
+            # Look up participant symbols directly from link.Object1 and link.Object2
+            sym1 = None
+            sym2 = None
+            obj1 = getattr(link, "Object1", None)
+            obj2 = getattr(link, "Object2", None)
+            if not obj1 or not obj2:
                 continue
-            sym1, sym2 = p1[1], p2[1]
+
+            oid1 = getattr(obj1, "ObjectID", None)
+            oid2 = getattr(obj2, "ObjectID", None)
+
+            for part_obj, part_sym in all_parts:
+                part_oid = getattr(part_obj, "ObjectID", None)
+                if part_oid == oid1 and not sym1:
+                    sym1 = part_sym
+                elif part_oid == oid2 and not sym2:
+                    sym2 = part_sym
+
+            if not sym1 or not sym2:
+                continue
+
             if hasattr(sym1, "Position") and hasattr(sym2, "Position"):
                 x1, y1 = sym1.Position.X, sym1.Position.Y
                 x2, y2 = sym2.Position.X, sym2.Position.Y
@@ -286,9 +325,6 @@ class CommunicationDiagramBuilder:
                     nx = -nx
                     ny = -ny
 
-                mx = (x1 + x2) / 2.0
-                my = (y1 + y2) / 2.0
-
                 for m_idx, m_info in enumerate(link_msgs):
                     label = m_info["label"]
                     msg_obj = m_info["msg"]
@@ -297,15 +333,24 @@ class CommunicationDiagramBuilder:
                     for s in diag_symbols:
                         cname = getattr(s, "ClassName", "")
                         if "Message" in cname or "Communication Message" in cname:
-                            if getattr(s, "Object", None) == msg_obj or s.Name == label:
+                            s_obj = getattr(s, "Object", None)
+                            if (s_obj and getattr(s_obj, "ObjectID", None) == getattr(msg_obj, "ObjectID", None)) or s.Name == label:
                                 msg_sym = s
                                 break
 
                     if not msg_sym or not hasattr(msg_sym, "ListOfPoints"):
                         continue
 
-                    is_p1_to_p2 = (m_info["sender"] == k1)
-                    dir_sign = 1.0 if is_p1_to_p2 else -1.0
+                    # Direction relative to link.Object1 -> link.Object2
+                    snd = getattr(msg_obj, "Sender", None)
+                    is_forward = (getattr(snd, "ObjectID", None) == oid1)
+                    dir_sign = 1.0 if is_forward else -1.0
+                    
+                    # Position arrow towards receiver (68%) to guarantee text clearance from sender box
+                    t_pos = 0.68 if is_forward else 0.32
+                    mx = x1 + t_pos * dx
+                    my = y1 + t_pos * dy
+
                     offset_d = base_offset + m_idx * step_offset
 
                     ax1 = int(mx - dir_sign * (arrow_len / 2.0) * ux + offset_d * nx)
@@ -317,6 +362,47 @@ class CommunicationDiagramBuilder:
                         msg_sym.ListOfPoints.AsText = f"(({ax1},{ay1}),({ax2},{ay2}))"
                     except Exception:
                         pass
+
+    def layout_tiered(
+        self,
+        tiers: List[List[Any]],
+        start_x: int = -42000,
+        spacing_x: int = 28000,
+        spacing_y: int = 16000,
+    ):
+        """
+        Arrange interacting nodes in multi-tier architecture columns:
+        Tier 0: Actors (e.g. ['Guest'])
+        Tier 1: Boundary / Controller (e.g. [':OrderController'])
+        Tier 2: Domain Services (e.g. [':RoomInventoryService', ':PaymentGateway', ':NotificationService'])
+        Tier 3: Repositories / External Gateways (e.g. [(':RoomRepository', 16000), (':BankService', 0)])
+        
+        Supports tuple items `(name, custom_y)` to align dependencies with their caller's Y row.
+        """
+        for t_idx, tier_nodes in enumerate(tiers):
+            col_x = start_x + t_idx * spacing_x
+            n = len(tier_nodes)
+            total_h = (n - 1) * spacing_y
+            start_y = total_h / 2.0
+            for r_idx, item in enumerate(tier_nodes):
+                if isinstance(item, tuple):
+                    name, custom_y = item
+                    row_y = custom_y
+                else:
+                    name = item
+                    row_y = int(start_y - r_idx * spacing_y)
+
+                part = self._resolve_participant(name)
+                if not part or not part[1]:
+                    continue
+                sym = part[1]
+                try:
+                    if hasattr(sym, "Position"):
+                        sym.Position.X = col_x
+                        sym.Position.Y = row_y
+                except Exception:
+                    pass
+        self.straighten_links()
 
     def layout_pipeline(
         self,
