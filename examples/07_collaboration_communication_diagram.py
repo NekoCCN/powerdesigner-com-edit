@@ -37,28 +37,28 @@ def main():
     builder.add_actor("Guest")
 
     # Central Controller / Coordinator
-    builder.add_object("OrderController", class_name="OrderController")
+    builder.add_object("orderController", class_name="OrderController", width=14000, height=4500)
 
     # Collaborating Subsystem Services
-    builder.add_object("RoomInventoryService", class_name="RoomInventoryService", width=10000, height=3600)
-    builder.add_object("PaymentGateway", class_name="PaymentGateway", width=9000, height=3600)
-    builder.add_object("NotificationService", class_name="NotificationService", width=9000, height=3600)
+    builder.add_object("roomService", class_name="RoomInventoryService", width=14000, height=4500)
+    builder.add_object("paymentGateway", class_name="PaymentGateway", width=14000, height=4500)
+    builder.add_object("notificationService", class_name="NotificationService", width=14000, height=4500)
 
     # Message sequence:
-    # 1. Guest -> OrderController: submitBooking()
-    builder.add_message("Guest", "OrderController", "submitBooking()", sequence_number="1")
+    # 1. Guest -> orderController: submitBooking()
+    builder.add_message("Guest", "orderController", "submitBooking()", sequence_number="1")
 
-    # 1.1 OrderController -> RoomInventoryService: lockRoom()
-    builder.add_message("OrderController", "RoomInventoryService", "lockRoom()", sequence_number="1.1")
+    # 1.1 orderController -> roomService: lockRoom()
+    builder.add_message("orderController", "roomService", "lockRoom()", sequence_number="1.1")
 
-    # 2. OrderController -> PaymentGateway: processPayment()
-    builder.add_message("OrderController", "PaymentGateway", "processPayment()", sequence_number="2")
+    # 2. orderController -> paymentGateway: processPayment()
+    builder.add_message("orderController", "paymentGateway", "processPayment()", sequence_number="2")
 
-    # 2.1 OrderController -> NotificationService: sendConfirmation()
-    builder.add_message("OrderController", "NotificationService", "sendConfirmation()", sequence_number="2.1")
+    # 2.1 orderController -> notificationService: sendConfirmation()
+    builder.add_message("orderController", "notificationService", "sendConfirmation()", sequence_number="2.1")
 
     print("[4/4] Applying Radial Topology Layout...")
-    builder.layout_radial(center_name="OrderController", radius=24000)
+    builder.layout_radial(center_name="orderController", radius=30000)
 
     output_oom = os.path.abspath("hotel_collaboration.oom")
     client.save_model(model, output_oom)

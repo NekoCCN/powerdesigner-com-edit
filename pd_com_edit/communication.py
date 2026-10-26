@@ -88,17 +88,38 @@ class CommunicationDiagramBuilder:
         class_name: str = "",
         x: Optional[int] = None,
         y: Optional[int] = None,
-        width: int = 12000,
-        height: int = 5000,
+        width: int = 14000,
+        height: int = 4500,
     ) -> Any:
-        """Create and attach an interacting Object/Instance node."""
+        """
+        Create and attach an interacting Object/Instance node conforming to UML 2.5 Lifeline standards.
+        If class_name is provided, associates with a Class classifier to render standard 'name : ClassName'.
+        """
         obj = ensure_dynamic(self.model.Objects.CreateNew())
         obj.Name = name
-        if class_name and hasattr(obj, "ClassName"):
+
+        # Standard UML 2.5 Lifeline Classifier Association
+        if class_name:
             try:
-                obj.ClassName = class_name
+                cls_obj = None
+                if hasattr(self.model, "Classes"):
+                    for c in self.model.Classes:
+                        if c.Name == class_name:
+                            cls_obj = c
+                            break
+                    if not cls_obj:
+                        cls_obj = ensure_dynamic(self.model.Classes.CreateNew())
+                        cls_obj.Name = class_name
+                if hasattr(obj, "Class") and cls_obj:
+                    obj.Class = cls_obj
             except Exception:
                 pass
+
+            if hasattr(obj, "ClassName"):
+                try:
+                    obj.ClassName = class_name
+                except Exception:
+                    pass
 
         sym = ensure_dynamic(self.diagram.AttachObject(obj))
 
@@ -208,11 +229,25 @@ class CommunicationDiagramBuilder:
         })
         return msg
 
-    def straighten_links(self):
+    def straighten_links(
+        self,
+        base_offset: int = 2200,
+        step_offset: int = 2000,
+        arrow_len: int = 3500,
+    ):
         """
-        Enforce clean, direct straight lines for all instance links.
-        Eliminates stray bend points, jagged orthogonal offsets, and misaligned arrows.
+        Enforce clean, direct straight lines for all instance links and automatically
+        offset message arrows/labels perpendicular to each link so that fonts NEVER
+        touch, cross, or cover the link line.
         """
+        diag_symbols = []
+        try:
+            if hasattr(self.diagram, "Symbols"):
+                for i in range(self.diagram.Symbols.Count):
+                    diag_symbols.append(ensure_dynamic(self.diagram.Symbols.Item(i)))
+        except Exception:
+            pass
+
         for (k1, k2), (link, sym_l) in self.links.items():
             if not sym_l or not hasattr(sym_l, "ListOfPoints"):
                 continue
@@ -228,6 +263,84 @@ class CommunicationDiagramBuilder:
                     sym_l.ListOfPoints.AsText = f"(({x1},{y1}),({x2},{y2}))"
                 except Exception:
                     pass
+
+                # Offset all message symbols associated with this link
+                link_msgs = [
+                    m for m in self.messages
+                    if (m["sender"] in (k1, k2)) and (m["receiver"] in (k1, k2))
+                ]
+                if not link_msgs:
+                    continue
+
+                dx = x2 - x1
+                dy = y2 - y1
+                L = math.sqrt(dx * dx + dy * dy)
+                if L <= 0:
+                    continue
+
+                ux = dx / L
+                uy = dy / L
+                nx = -uy
+                ny = ux
+                if ny < -0.01 or (abs(ny) <= 0.01 and nx < -0.01):
+                    nx = -nx
+                    ny = -ny
+
+                mx = (x1 + x2) / 2.0
+                my = (y1 + y2) / 2.0
+
+                for m_idx, m_info in enumerate(link_msgs):
+                    label = m_info["label"]
+                    msg_obj = m_info["msg"]
+                    # Find matching Communication Message Symbol
+                    msg_sym = None
+                    for s in diag_symbols:
+                        cname = getattr(s, "ClassName", "")
+                        if "Message" in cname or "Communication Message" in cname:
+                            if getattr(s, "Object", None) == msg_obj or s.Name == label:
+                                msg_sym = s
+                                break
+
+                    if not msg_sym or not hasattr(msg_sym, "ListOfPoints"):
+                        continue
+
+                    is_p1_to_p2 = (m_info["sender"] == k1)
+                    dir_sign = 1.0 if is_p1_to_p2 else -1.0
+                    offset_d = base_offset + m_idx * step_offset
+
+                    ax1 = int(mx - dir_sign * (arrow_len / 2.0) * ux + offset_d * nx)
+                    ay1 = int(my - dir_sign * (arrow_len / 2.0) * uy + offset_d * ny)
+                    ax2 = int(mx + dir_sign * (arrow_len / 2.0) * ux + offset_d * nx)
+                    ay2 = int(my + dir_sign * (arrow_len / 2.0) * uy + offset_d * ny)
+
+                    try:
+                        msg_sym.ListOfPoints.AsText = f"(({ax1},{ay1}),({ax2},{ay2}))"
+                    except Exception:
+                        pass
+
+    def layout_pipeline(
+        self,
+        sequence: List[str],
+        start_x: int = -30000,
+        spacing_x: int = 24000,
+        y: int = 0,
+    ):
+        """
+        Arrange interacting nodes in a left-to-right architectural pipeline (Tiered Flow).
+        Standard for linear usecase realizations (Actor -> Controller -> Services -> DB).
+        """
+        for idx, name in enumerate(sequence):
+            part = self._resolve_participant(name)
+            if not part or not part[1]:
+                continue
+            sym = part[1]
+            try:
+                if hasattr(sym, "Position"):
+                    sym.Position.X = start_x + idx * spacing_x
+                    sym.Position.Y = y
+            except Exception:
+                pass
+        self.straighten_links()
 
     def layout_radial(
         self,
@@ -279,7 +392,7 @@ class CommunicationDiagramBuilder:
             except Exception:
                 pass
 
-        # Straighten links between moved nodes to guarantee clean straight vectors
+        # Straighten links and offset message labels away from lines
         self.straighten_links()
 
     def layout_grid(
