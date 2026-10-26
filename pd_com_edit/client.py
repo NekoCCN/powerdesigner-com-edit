@@ -45,6 +45,20 @@ def rgb(r: int, g: int, b: int) -> int:
     return int(r) + (int(g) << 8) + (int(b) << 16)
 
 
+def ensure_dynamic(obj):
+    """
+    Ensure a COM object uses late-bound dynamic dispatch.
+    This prevents early-binding BaseObject wrapper issues where derived properties
+    (like Name, Position, Object1, etc.) are stripped by makepy/gencache.
+    """
+    if hasattr(obj, "_oleobj_") and win32com is not None:
+        try:
+            return win32com.client.dynamic.Dispatch(obj._oleobj_)
+        except Exception:
+            pass
+    return obj
+
+
 def attach_link_symbol(diagram, link_obj):
     """
     Safely attach a link/connector symbol (Association, Generalization, Dependency, Reference)
@@ -121,9 +135,26 @@ class PowerDesignerClient:
 
     def create_oom_model(self, name: str = "NewOOM", language: str = "Java"):
         """Create a new Object-Oriented Model (OOM)."""
-        model = self.app.CreateModel(CLS_OOM, f"|Language={language}|")
+        opts = f"|Language={language}|"
+        try:
+            model = self.app.CreateModel(MODEL_OOM, opts, 0)
+        except Exception:
+            model = self.app.CreateModel(CLS_OOM, opts)
+
+        if hasattr(model, "_oleobj_") and win32com:
+            try:
+                model = win32com.client.dynamic.Dispatch(model._oleobj_)
+            except Exception:
+                pass
+
         if name:
-            model.SetName(name)
+            try:
+                model.SetName(name)
+            except Exception:
+                try:
+                    model.Name = name
+                except Exception:
+                    pass
         return model
 
     create_oom = create_oom_model
@@ -152,7 +183,13 @@ class PowerDesignerClient:
             path = os.path.abspath(path)
         if not os.path.exists(path):
             raise FileNotFoundError(f"Model file not found: {path}")
-        return self.app.OpenModel(path)
+        m = self.app.OpenModel(path)
+        if hasattr(m, "_oleobj_") and win32com:
+            try:
+                m = win32com.client.dynamic.Dispatch(m._oleobj_)
+            except Exception:
+                pass
+        return m
 
     def save_model(self, model, path: str):
         """Save a model to specified target file path."""
@@ -170,9 +207,10 @@ class PowerDesignerClient:
     def close_model(self, model, save_changes: bool = False):
         """Close an individual model safely."""
         try:
+            m = ensure_dynamic(model)
             if save_changes:
-                model.Save()
-            model.Close()
+                m.Save()
+            m.Close()
         except Exception:
             pass
 

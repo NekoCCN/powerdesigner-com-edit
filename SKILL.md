@@ -135,12 +135,91 @@ Associations are drawn left-to-right into Column 2, ensuring clean horizontal co
 
 ### Connector Attachment Rules (No Missing Lines)
 - 2D symbols use `diagram.AttachObject(obj)`.
-- 1D connectors (associations, dependencies, generalizations, references) **must** use `diagram.AttachLinkObject(link)` via `attach_link_symbol()`.
+- 1D connectors (associations, dependencies, generalizations, references, instance links, flows, transitions) **must** use `diagram.AttachLinkObject(link)` via `attach_link_symbol()`.
 - Set `link.Object1` and `link.Object2` before calling `AttachLinkObject`. Calling `AttachObject` on links silently fails to render line symbols.
 
 ---
 
-## 5. Process Hygiene & Error Recovery
+## 5. Communication / Collaboration Diagram (协作图 / 通信图)
+
+Communication diagrams represent object interaction focusing on structural relationships and message paths with explicit call sequence numbers (`1: submitOrder()`, `1.1: lockRoom()`, `2: processPayment()`):
+
+```python
+from pd_com_edit import PowerDesignerClient, CommunicationDiagramBuilder
+
+client = PowerDesignerClient(visible=False)
+model = client.create_oom(name="Booking_Collaboration")
+diag = model.CommunicationDiagrams.CreateNew()
+
+builder = CommunicationDiagramBuilder(diag, center_x=0, center_y=0, default_radius=18000)
+builder.add_actor("Guest")
+builder.add_object("OrderController")
+builder.add_object("PaymentService")
+builder.add_object("RoomInventoryService")
+
+# Add numbered directional messages along structural instance links
+builder.add_message("Guest", "OrderController", "submitBooking(info)", sequence_number="1:")
+builder.add_message("OrderController", "RoomInventoryService", "lockRoom(roomId)", sequence_number="1.1:")
+builder.add_message("OrderController", "PaymentService", "charge(amount)", sequence_number="2:")
+
+# Radial star topology prevents crossing link lines
+builder.layout_radial(center_name="OrderController", radius=18000)
+builder.diagram.ExportImage("output/collaboration-flow.png")
+```
+
+---
+
+## 6. Activity & State Machine Diagrams (活动图与状态机图)
+
+### Activity Diagram (活动图)
+```python
+from pd_com_edit import ActivityDiagramBuilder
+
+act_diag = model.ActivityDiagrams.CreateNew()
+builder = ActivityDiagramBuilder(act_diag)
+builder.add_activity("Fill Order Details")
+builder.add_decision("Is Room Available?")
+builder.add_activity("Process Payment")
+
+builder.add_flow("Fill Order Details", "Is Room Available?")
+builder.add_flow("Is Room Available?", "Process Payment", guard="Available")
+builder.layout_vertical()
+```
+
+### State Machine / Statechart Diagram (状态机图)
+```python
+from pd_com_edit import StatechartDiagramBuilder
+
+st_diag = model.StatechartDiagrams.CreateNew()
+builder = StatechartDiagramBuilder(st_diag)
+builder.add_state("PendingPayment")
+builder.add_state("OrderConfirmed")
+builder.add_state("Completed")
+
+builder.add_transition("PendingPayment", "OrderConfirmed", event="paySuccess", guard="amount > 0", action="emitReceipt()")
+builder.add_transition("OrderConfirmed", "Completed", event="checkOut")
+builder.layout_pipeline()
+```
+
+---
+
+## 7. Software Engineering Diagram Coverage Matrix
+
+| Diagram Type | PlantUML Equivalent | PowerDesigner Metaclass | Skill Builder | SE Purpose |
+|---|---|---|---|---|
+| **Use Case Diagram** | `@startuml ... (UC)` | `UseCaseDiagram` | `UseCaseDiagramBuilder` | Requirements analysis: Actors and capabilities |
+| **Sequence Diagram** | `@startuml ... ->` | `SequenceDiagram` | `SequenceDiagramBuilder` | Interaction: Chronological message timeline |
+| **Communication / Collaboration** | `@startuml ...` (annotated) | `CommunicationDiagram` | `CommunicationDiagramBuilder` | Interaction: Object topology with sequence numbers |
+| **Class Diagram** | `@startuml class ...` | `ClassDiagram` | `ClassDiagramBuilder` | Static architecture: OOP attributes, methods, inheritance |
+| **Activity Diagram** | `@startuml :start; ...` | `ActivityDiagram` | `ActivityDiagramBuilder` | Workflow: Business processes, decisions, and joins |
+| **State Machine Diagram** | `@startuml [*] --> ...` | `StatechartDiagram` | `StatechartDiagramBuilder` | Lifecycle: Entity states and event transitions |
+| **Component Diagram** | `@startuml [Comp] ...` | `ComponentDiagram` | `ComponentDiagramBuilder` | High-level modular architecture and dependencies |
+| **Deployment Diagram** | `@startuml node ...` | `DeploymentDiagram` | `DeploymentDiagramBuilder` | Physical infrastructure, nodes, and networking |
+| **Physical Data Model (PDM)** | `@startuml entity/er` | `PhysicalDiagram` | `PdmBuilder` | Storage: Relational schema, tables, PK/FK joins |
+
+---
+
+## 8. Process Hygiene & Error Recovery
 
 PowerDesigner's COM server (`pdshell16.exe`) can linger in memory if an exception occurs before `Quit()`, causing file-locking errors:
 

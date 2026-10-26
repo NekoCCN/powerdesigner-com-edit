@@ -121,6 +121,12 @@ Multi-layer cold-chain monitoring system architecture generated directly through
 
 ![System Architecture Overview](docs/images/system-architecture.png)
 
+### 6. Communication / Collaboration Diagram: Radial Star Topology
+
+UML Collaboration / Communication diagram demonstrating structural object collaboration with directional call-sequence numbering (`1:`, `1.1:`, `2:`) and circular radial distribution:
+
+![Communication Diagram](docs/images/collaboration-order-flow.png)
+
 ---
 
 ## How Agents Use This Skill

@@ -11,6 +11,11 @@ from .collision import CollisionDetector, LayoutAuditor, BoundingBox, CollisionR
 from .sequence import SequenceDiagramBuilder
 from .usecase import UseCaseDiagramBuilder
 from .class_diagram import ClassDiagramBuilder
+from .communication import CommunicationDiagramBuilder
+from .activity import ActivityDiagramBuilder
+from .statechart import StatechartDiagramBuilder
+from .component import ComponentDiagramBuilder
+from .deployment import DeploymentDiagramBuilder
 from .pdm import PdmBuilder
 from .export import ImageExporter
 
@@ -19,6 +24,11 @@ __all__ = [
     "SequenceDiagramBuilder",
     "UseCaseDiagramBuilder",
     "ClassDiagramBuilder",
+    "CommunicationDiagramBuilder",
+    "ActivityDiagramBuilder",
+    "StatechartDiagramBuilder",
+    "ComponentDiagramBuilder",
+    "DeploymentDiagramBuilder",
     "PdmBuilder",
     "CollisionDetector",
     "LayoutAuditor",
