@@ -210,7 +210,15 @@ class PowerDesignerClient:
             m = ensure_dynamic(model)
             if save_changes:
                 m.Save()
-            m.Close()
+            else:
+                try:
+                    m.Modified = False
+                except Exception:
+                    pass
+            try:
+                m.Close(False)
+            except Exception:
+                m.Close()
         except Exception:
             pass
 
@@ -227,10 +235,18 @@ class PowerDesignerClient:
         try:
             if self.app:
                 while self.app.Models.Count > 0:
-                    m = self.app.Models.Item(0)
+                    m = ensure_dynamic(self.app.Models.Item(0))
                     if save_changes:
                         m.Save()
-                    m.Close()
+                    else:
+                        try:
+                            m.Modified = False
+                        except Exception:
+                            pass
+                    try:
+                        m.Close(False)
+                    except Exception:
+                        m.Close()
         except Exception:
             pass
         self.app = None

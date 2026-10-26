@@ -6,7 +6,7 @@ UML Sequence Diagram Builder with Call-Stack Activation Bar Automation
 
 from typing import List, Dict, Tuple, Optional, Any
 from .collision import CollisionDetector
-from .client import attach_link_symbol
+from .client import attach_link_symbol, ensure_dynamic
 
 class SequenceDiagramBuilder:
     """
@@ -19,8 +19,8 @@ class SequenceDiagramBuilder:
     """
 
     def __init__(self, diagram: Any, start_x: int = 1500, spacing_x: int = 2500, start_y: int = -1500, step_y: int = -500):
-        self.diagram = diagram
-        self.model = diagram.Model
+        self.diagram = ensure_dynamic(diagram)
+        self.model = ensure_dynamic(self.diagram.Model)
         self.start_x = start_x
         self.spacing_x = spacing_x
         self.start_y = start_y
@@ -37,12 +37,15 @@ class SequenceDiagramBuilder:
         x_pos = self.start_x + idx * self.spacing_x
         
         if is_actor:
-            obj = self.model.Actors.CreateNew()
+            obj = ensure_dynamic(self.model.Actors.CreateNew())
         else:
-            obj = self.model.Classes.CreateNew()
-        obj.SetName(name)
+            obj = ensure_dynamic(self.model.Classes.CreateNew())
+        try:
+            obj.SetName(name)
+        except Exception:
+            obj.Name = name
 
-        sym = self.diagram.AttachObject(obj)
+        sym = ensure_dynamic(self.diagram.AttachObject(obj))
         try:
             sym.Position.X = x_pos
             sym.Position.Y = self.start_y + 800
@@ -105,11 +108,14 @@ class SequenceDiagramBuilder:
             s_obj, s_sym, _ = self.lifelines[s_name]
             r_obj, r_sym, _ = self.lifelines[r_name]
 
-            msg = self.model.Messages.CreateNew()
-            msg.SetName(label)
+            msg = ensure_dynamic(self.model.Messages.CreateNew())
+            try:
+                msg.SetName(label)
+            except Exception:
+                msg.Name = label
             msg.Sender = s_obj
             msg.Receiver = r_obj
-            msg_sym = attach_link_symbol(self.diagram, msg)
+            msg_sym = ensure_dynamic(attach_link_symbol(self.diagram, msg))
 
             try:
                 if hasattr(msg_sym, "SourcePoint"):

@@ -32,7 +32,7 @@ class CommunicationDiagramBuilder:
         name: str = "",
         center_x: int = 0,
         center_y: int = 0,
-        default_radius: int = 20000,
+        default_radius: int = 25000,
     ):
         self.diagram = ensure_dynamic(diagram)
         self.model = ensure_dynamic(self.diagram.Model)
@@ -170,28 +170,64 @@ class CommunicationDiagramBuilder:
         receiver_obj = self._resolve_participant(receiver_name)[0]
 
         msg = ensure_dynamic(self.model.Messages.CreateNew())
-        full_label = f"{sequence_number} {label}".strip() if sequence_number else label
-        msg.Name = full_label
+        clean_seq = sequence_number.strip().rstrip(":")
+        clean_label = label.strip()
+
+        # In PowerDesigner OOM, setting SequenceNumber natively prefixes the colon and arrow
+        if clean_seq and hasattr(msg, "SequenceNumber"):
+            try:
+                msg.SequenceNumber = clean_seq
+                msg.Name = clean_label
+            except Exception:
+                msg.Name = f"{clean_seq}: {clean_label}"
+        else:
+            msg.Name = clean_label
+
         msg.Sender = sender_obj
         msg.Receiver = receiver_obj
 
-        # Bind to link
+        # Bind to link using official Sybase insert (-1)
         try:
             if hasattr(link, "Messages"):
-                link.Messages.Add(msg)
+                link.Messages.Insert(-1, msg)
             elif hasattr(msg, "InstanceLink"):
                 msg.InstanceLink = link
         except Exception:
-            pass
+            try:
+                if hasattr(link, "Messages"):
+                    link.Messages.Add(msg)
+            except Exception:
+                pass
 
         self.messages.append({
             "sender": sender_name,
             "receiver": receiver_name,
-            "label": full_label,
-            "seq": sequence_number,
+            "label": clean_label,
+            "seq": clean_seq,
             "msg": msg
         })
         return msg
+
+    def straighten_links(self):
+        """
+        Enforce clean, direct straight lines for all instance links.
+        Eliminates stray bend points, jagged orthogonal offsets, and misaligned arrows.
+        """
+        for (k1, k2), (link, sym_l) in self.links.items():
+            if not sym_l or not hasattr(sym_l, "ListOfPoints"):
+                continue
+            p1 = self._resolve_participant(k1)
+            p2 = self._resolve_participant(k2)
+            if not p1 or not p2 or not p1[1] or not p2[1]:
+                continue
+            sym1, sym2 = p1[1], p2[1]
+            if hasattr(sym1, "Position") and hasattr(sym2, "Position"):
+                x1, y1 = sym1.Position.X, sym1.Position.Y
+                x2, y2 = sym2.Position.X, sym2.Position.Y
+                try:
+                    sym_l.ListOfPoints.AsText = f"(({x1},{y1}),({x2},{y2}))"
+                except Exception:
+                    pass
 
     def layout_radial(
         self,
@@ -203,6 +239,7 @@ class CommunicationDiagramBuilder:
         Canonical Star/Radial layout for Collaboration diagrams:
         - Central Controller / Core Service placed at origin (center_x, center_y).
         - Surrounding collaborators evenly spaced on a circle perimeter to avoid link crossings.
+        - Automatically straightens all instance link lines and snaps directional message arrows.
         """
         r = radius or self.default_radius
         all_nodes = {**self.actors, **self.objects}
@@ -212,7 +249,6 @@ class CommunicationDiagramBuilder:
         # Pick center node
         center_key = center_name
         if not center_key or center_key not in all_nodes:
-            # Default to first object or actor
             center_key = list(all_nodes.keys())[0]
 
         center_sym = all_nodes[center_key][1]
@@ -243,15 +279,18 @@ class CommunicationDiagramBuilder:
             except Exception:
                 pass
 
+        # Straighten links between moved nodes to guarantee clean straight vectors
+        self.straighten_links()
+
     def layout_grid(
         self,
         cols: int = 3,
-        spacing_x: int = 16000,
-        spacing_y: int = 10000,
-        start_x: int = -16000,
-        start_y: int = 10000,
+        spacing_x: int = 18000,
+        spacing_y: int = 12000,
+        start_x: int = -18000,
+        start_y: int = 12000,
     ):
-        """Arrange nodes in structured rectangular grid."""
+        """Arrange nodes in structured rectangular grid and straighten connecting links."""
         all_nodes = list(self.actors.values()) + list(self.objects.values())
         for idx, (_, sym) in enumerate(all_nodes):
             row = idx // cols
@@ -264,6 +303,8 @@ class CommunicationDiagramBuilder:
                     sym.Position.Y = y
             except Exception:
                 pass
+
+        self.straighten_links()
 
     def audit_and_fix_overlaps(self, min_spacing: int = 1500):
         """Auto-resolve overlapping object boxes."""

@@ -75,6 +75,7 @@ class MockObject:
 class MockMessage:
     def __init__(self):
         self.Name = ""
+        self.SequenceNumber = ""
         self.Sender = None
         self.Receiver = None
         self.InstanceLink = None
@@ -144,13 +145,15 @@ class TestCommunicationDiagramBuilder(unittest.TestCase):
         # Add numbered message 1
         msg1 = self.builder.add_message("Guest", "roomService", "bookRoom(roomType)", sequence_number="1:")
         self.assertIsNotNone(msg1)
-        self.assertEqual(msg1.Name, "1: bookRoom(roomType)")
+        self.assertEqual(msg1.SequenceNumber, "1")
+        self.assertEqual(msg1.Name, "bookRoom(roomType)")
         self.assertEqual(len(link.Messages), 1)
 
         # Add message 2 (auto-creates link between roomService and paymentGateway)
         msg2 = self.builder.add_message("roomService", "paymentGateway", "chargeCard(amount)", sequence_number="2:")
         self.assertIsNotNone(msg2)
-        self.assertEqual(msg2.Name, "2: chargeCard(amount)")
+        self.assertEqual(msg2.SequenceNumber, "2")
+        self.assertEqual(msg2.Name, "chargeCard(amount)")
         self.assertEqual(len(self.diag.link_objects_attached), 2)
 
     def test_radial_layout(self):
