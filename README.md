@@ -121,9 +121,9 @@ Multi-layer cold-chain monitoring system architecture generated directly through
 
 ![System Architecture Overview](docs/images/system-architecture.png)
 
-### 6. Communication / Collaboration Diagram: Radial Star Topology
+### 6. Communication / Collaboration Diagram: Multi-Tier Layout & Straight Links
 
-UML Collaboration / Communication diagram demonstrating structural object collaboration with directional call-sequence numbering (`1:`, `1.1:`, `2:`) and circular radial distribution:
+UML 2.5 Collaboration / Communication diagram demonstrating structural object collaboration with direct straight instance links (`CornerStyle = 0`), anonymous lifelines (`:ClassName`), and 3-tier hierarchical decimal call-sequence numbering (`1:`, `1.1:`, `1.1.1:`, `1.2:`):
 
 ![Communication Diagram](docs/images/collaboration-order-flow.png)
 
